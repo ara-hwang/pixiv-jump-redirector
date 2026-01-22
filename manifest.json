@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "pixiv Jump Redirector",
+  "version": "1.1",
+  "description": "Automatically redirects pixiv jump.php links to their original URLs.",
+  "host_permissions": ["https://www.pixiv.net/*"],
+  "content_scripts": [
+    {
+      "matches": ["*://www.pixiv.net/jump.php*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
