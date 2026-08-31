@@ -5,7 +5,7 @@
 // @match       *://www.pixiv.net/jump.php*
 // @grant       none
 // @inject-into content
-// @version     1.2
+// @version     1.3
 // @author      ara-hwang
 // @description Skip pixiv jump.php and open the destination URL
 // @run-at      document-start
@@ -66,10 +66,11 @@
     if (redirectJumpPage()) return;
     const anchor = document.querySelector('a[href^="http"]');
     if (
-      anchor instanceof HTMLAnchorElement &&
-      !/(^|\.)pixiv\.net$/i.test(anchor.hostname)
+      anchor &&
+      anchor.tagName === "A" &&
+      !/(^|\.)pixiv\.net$/i.test(/** @type {HTMLAnchorElement} */ (anchor).hostname)
     ) {
-      location.replace(anchor.href);
+      location.replace(/** @type {HTMLAnchorElement} */ (anchor).href);
     }
   }
 
@@ -85,42 +86,43 @@
     return;
   }
 
-  /** @param {ParentNode | Element} root */
+  /** @param {EventTarget | null} node */
+  function asElement(node) {
+    if (!node || /** @type {Node} */ (node).nodeType !== 1) return null;
+    return /** @type {Element} */ (node);
+  }
+
+  /** @param {ParentNode | Element | null} root */
   function rewriteJumpLinks(root) {
-    /** @type {Iterable<Element>} */
-    const nodes =
-      root instanceof Element && root.matches?.("a[href*='jump.php']")
-        ? [root]
-        : (root.querySelectorAll?.("a[href*='jump.php']") ?? []);
+    if (!root) return;
+    const rootEl = asElement(/** @type {EventTarget} */ (root));
+    /** @type {Element[]} */
+    const nodes = [];
+    if (rootEl?.matches?.("a[href*='jump.php']")) nodes.push(rootEl);
+    if (root.querySelectorAll) {
+      nodes.push(...root.querySelectorAll("a[href*='jump.php']"));
+    }
     for (const node of nodes) {
-      if (!(node instanceof HTMLAnchorElement)) continue;
-      const target = extractJumpTarget(node.href);
-      if (!target || node.href === target) continue;
-      node.href = target;
+      if (node.tagName !== "A") continue;
+      const anchor = /** @type {HTMLAnchorElement} */ (node);
+      const target = extractJumpTarget(anchor.href);
+      if (!target || anchor.href === target) continue;
+      // preventDefault + window.open 은 팝업 차단 시 클릭이 아무 것도 안 함
+      // href만 바꿔 브라우저 기본 이동(target=_blank 포함)을 그대로 쓴다
+      anchor.href = target;
     }
   }
 
   document.addEventListener(
     "click",
     (event) => {
-      const clicked = event.target;
-      if (!(clicked instanceof Element)) return;
+      const clicked = asElement(event.target) || asElement(event.target && /** @type {Node} */ (event.target).parentElement);
+      if (!clicked?.closest) return;
       const anchor = clicked.closest("a[href*='jump.php']");
-      if (!(anchor instanceof HTMLAnchorElement)) return;
-      const target = extractJumpTarget(anchor.href);
+      if (!anchor || anchor.tagName !== "A") return;
+      const target = extractJumpTarget(/** @type {HTMLAnchorElement} */ (anchor).href);
       if (!target) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (
-        anchor.target === "_blank" ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey
-      ) {
-        window.open(target, "_blank", "noopener,noreferrer");
-      } else {
-        location.assign(target);
-      }
+      /** @type {HTMLAnchorElement} */ (anchor).href = target;
     },
     true
   );
